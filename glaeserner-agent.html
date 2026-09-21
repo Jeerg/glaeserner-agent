@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glaeserner Agent</title>
+<style>
+  :root{--blau:#1F497D;--badge:#4F81BD;--panel:#DCE6F1;--grau:#808080;--bg:#F4F6FA;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:#1a1a1a;font-family:"Segoe UI",Arial,sans-serif}
+  html,body{height:100%}
+  @keyframes einblenden{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .step,.runde,.schritt,.frg,.subwrap,.col{animation:einblenden .28s ease-out both}
+  @media (prefers-reduced-motion:reduce){ .step,.runde,.schritt,.frg,.subwrap,.col{animation:none} }
+  /* Nebeneinander-Layout (16:9-Desktop): Verlauf/Ausgabe LINKS breit, Sequenzdiagramm
+     RECHTS als hohe Spalte mit eigenem Scroll - beide fuellen die verbleibende Hoehe. */
+  .wrap{display:flex;flex-direction:column;height:calc(100vh - 82px);min-height:0;padding:8px 24px 8px}
+  .split{display:flex;flex:1 1 auto;min-height:0;gap:14px}
+  .verlauf{flex:1 1 auto;min-width:0;min-height:0;overflow-y:auto;padding:2px 6px 12px 2px}
+  /* Diagramm-Panel: das Sequenzdiagramm wird IMMER GANZ gezeigt - in die Panelgroesse
+     eingepasst (contain, Breite UND Hoehe), nie nur ein Teil, kein Scrollen am Diagramm.
+     Panel breiter (48%), damit es dabei gross bleibt. */
+  .seqpanel{flex:0 0 48%;min-width:360px;height:100%;display:flex;flex-direction:column;overflow:hidden;border:1px solid #cdd8ea;border-radius:8px;background:#fff;padding:6px 10px}
+  .seqcap{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--blau);margin:0 0 4px;letter-spacing:.02em}
+  #seqbox{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border:none;padding:0}
+  #seqbox.seqempty{color:var(--grau);font-size:13px}
+  /* SVG skaliert so, dass es komplett ins Panel passt (Seitenverhaeltnis erhalten). */
+  #seqbox svg{max-width:100%;max-height:100%;width:auto;height:auto}
+  .rolle{display:inline-block;background:var(--blau);color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;font-weight:700;margin-right:7px;vertical-align:middle;letter-spacing:.02em}
+  header{background:linear-gradient(135deg,#242852,#1C366B 55%,#4A66AC);color:#fff;padding:18px 24px}
+  header h1{margin:0;font-size:22px;font-weight:700}
+  header p{margin:4px 0 0;font-size:13px;color:#C7D7EF}
+  .wrap{max-width:1680px;margin:0 auto;padding:10px 24px 12px}
+  .setup{background:#fff;border:1px solid #e2e8f2;border-radius:10px;padding:12px 14px;margin:16px 0;font-size:14px}
+  .setup label{font-weight:600;color:var(--blau);display:block;margin-bottom:4px}
+  .setup input{width:100%;padding:9px 11px;font-size:14px;font-family:inherit;border:1px solid #BFCEE6;border-radius:7px}
+  .setup .row2{display:flex;gap:10px;margin-top:10px;align-items:end}
+  .setup .row2 > div{flex:1}
+  .setup button{padding:9px 16px;font-weight:600;font-family:inherit;background:var(--blau);color:#fff;border:none;border-radius:7px;cursor:pointer;white-space:nowrap}
+  .hint{color:var(--grau);font-size:12px;margin-top:6px}
+  .ok{color:#0E7A4B;font-weight:600}
+  .frage-zeile{display:flex;gap:10px;margin:18px 0}
+  #frage{flex:1;padding:12px 14px;font-size:16px;font-family:inherit;border:1px solid #BFCEE6;border-radius:8px}
+  #frage:focus,.setup input:focus{outline:none;border-color:var(--blau);box-shadow:0 0 0 3px rgba(31,73,125,.15)}
+  #btn{padding:12px 20px;font-size:16px;font-weight:600;font-family:inherit;background:var(--blau);color:#fff;border:none;border-radius:8px;cursor:pointer}
+  #btn:disabled{background:#9aa9c4;cursor:default}
+  .bsp{font-size:13px;color:var(--grau);margin:0 0 6px}
+  .bsp a{color:var(--blau);cursor:pointer;text-decoration:underline;margin-right:14px}
+  #log{margin-top:14px}
+  .runde{margin:18px 0 6px;font-weight:700;color:var(--blau);border-top:1px solid #dde3ee;padding-top:10px}
+  .kontext{font-size:12px;color:var(--grau);font-weight:400;margin-left:8px}
+  .schritt{padding:8px 12px;border-radius:8px;margin:6px 0;font-size:14px;line-height:1.45}
+  .lab{display:inline-block;min-width:82px;font-weight:700;font-size:12px;letter-spacing:.03em}
+  .denken{background:#fff;border:1px solid #e2e8f2}
+  .denken pre{margin:6px 0 0;font-family:"Cascadia Code",Consolas,monospace;font-size:13px;white-space:pre-wrap;color:#333}
+  .aktion{background:var(--panel)} .aktion .lab{color:var(--blau)}
+  .aktion code{font-family:"Cascadia Code",Consolas,monospace;font-weight:700;color:var(--blau)}
+  .beob{background:#ECF7F0;border:1px solid #cfe9d8} .beob .lab{color:#0E7A4B}
+  .antwort{background:var(--blau);color:#fff;font-size:18px;font-weight:700;padding:16px 18px}
+  .fehler{background:#FDECEA;border:1px solid #f5c2bd;color:#9b2c22}
+  .frg{font-weight:700;font-size:17px;margin:10px 0 2px;color:#111}
+  .info{background:#fff;border:1px solid #e2e8f2;border-left:4px solid var(--blau);border-radius:8px;padding:14px 16px;margin:16px 0;font-size:14px;line-height:1.55}
+  .info b{color:var(--blau)}
+  .info .werk{margin:10px 0 0}
+  .step{border:1px solid #e6ebf3;border-left:4px solid var(--badge);border-radius:8px;margin:8px 0;padding:10px 14px;background:#fff}
+  .step .t{font-weight:700;font-size:13.5px;color:var(--blau);margin-bottom:5px}
+  .step .b{font-size:14px;line-height:1.5}
+  .step.denken{border-left-color:#8a6d3b}
+  .step.denken pre,.step .b pre{margin:6px 0 0;font-family:"Cascadia Code",Consolas,monospace;font-size:13px;white-space:pre-wrap;color:#333;background:#f6f8fb;padding:8px 10px;border-radius:6px}
+  .step.aktion{border-left-color:var(--blau);background:var(--panel)}
+  .step.aktion code,.step .b code{font-family:"Cascadia Code",Consolas,monospace;font-weight:700;color:var(--blau)}
+  .step.beob{border-left-color:#0E7A4B;background:#ECF7F0}
+  .step.spawn{border-left-color:#8B5CF6;background:#F5F1FE}
+  .step.diskut{border-left-color:#8a6d3b;background:#FBF7EF}
+  .step.plan{border-left-color:#0E7A7A;background:#ECF6F6}
+  .step.diskut .t{color:#8a6d3b} .step.plan .t{color:#0E7A7A}
+  .step.fehler{border-left-color:#c0392b;background:#FDECEA} .step.fehler .t{color:#c0392b}
+  .step details{margin-top:8px}
+  .step details summary{cursor:pointer;color:var(--blau);font-size:13px}
+  .tok{margin-top:8px;font-size:12.5px;color:#555;background:#f6f8fb;border:1px solid #e6ebf3;border-radius:6px;padding:6px 9px;line-height:1.5}
+  .tok b{color:var(--blau)}
+  .msgs{max-height:240px;overflow:auto;background:#f6f8fb;border:1px solid #e2e8f2;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:12.5px;line-height:1.45}
+  .msg{padding:5px 0;border-bottom:1px solid #eef1f6}
+  .msg:last-child{border-bottom:none}
+  .msg b{color:var(--blau)}
+  .msg.system{color:#777}
+  .diagramme{margin:10px 0}
+  .diagramme .gcap{font-size:12px;font-weight:700;color:var(--blau);margin:8px 0 3px;letter-spacing:.02em}
+  .graphbox{margin:0 0 6px;padding:6px 8px;border:1px dashed #b9c8e2;border-radius:8px;background:#fff;overflow:auto}
+  .graphbox svg{max-width:100%;height:auto}
+  .subwrap{border:1px solid #ddd0f4;background:#FBFAFF;border-radius:8px;padding:8px 10px;margin:8px 0}
+  .subwrap > .subtitel{font-size:13px;font-weight:700;color:#6D28D9;margin:0 0 6px}
+  .cols{display:flex;gap:14px;margin-top:6px;flex-wrap:wrap;align-items:flex-start}
+  .col{flex:1 1 340px;min-width:0;border:1px solid #cdd8ea;border-radius:8px;padding:8px 10px;background:#fbfcfe}
+  .col h4{margin:2px 0 8px;font-size:14px;color:var(--blau)}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+</head>
+<body>
+<header>
+  <h1>Glaeserner Agent</h1>
+  <p>Tippen Sie eine Frage - Sie sehen jeden Gedanken, jeden Werkzeugaufruf und jede Beobachtung.</p>
+</header>
+<div class="wrap">
+
+  <div class="setup" id="setup">
+    <label for="key">DeepInfra-Schluessel (einmalig, wird nur in diesem Browser gespeichert - nicht in der Datei)</label>
+    <input id="key" type="password" placeholder="Bearer-Schluessel einfuegen ...">
+    <div class="row2">
+      <div>
+        <label for="model">Modell</label>
+        <input id="model" type="text" value="meta-llama/Llama-3.3-70B-Instruct">
+      </div>
+      <button onclick="speichern()">Merken</button>
+    </div>
+    <div class="hint" id="setupHint">Der Schluessel bleibt lokal in Ihrem Browser (localStorage). Die HTML-Datei enthaelt keinen Schluessel und ist gefahrlos kopierbar.</div>
+  </div>
+
+  <p class="bsp">Beispiele:
+    <a onclick="setF('Ist Auftrag 4711 termingerecht?')">Ist Auftrag 4711 termingerecht?</a>
+    <a onclick="setF('Welche Teile sind laut auftraege.csv gar nicht auf Lager?')">Fehlende Teile (Python)</a>
+    <a onclick="setF('Liste mit PowerShell die Dateien in diesem Ordner auf.')">Dateien im Ordner (PowerShell)</a>
+    <a onclick="setF('Zeig mir mit PowerShell den Rechnernamen und die Windows-Version.')">Systeminfo (PowerShell)</a>
+    <a onclick="setF('Vergleiche die Auftraege 4711 und 4712 - welcher ist termingerecht?')"><b>Zwei Auftraege vergleichen (spawnt Subagenten)</b></a>
+    <a onclick="setF('Lies die Datei bestellungen.csv und zeig die ersten Zeilen.')">Fehler + Selbstkorrektur</a>
+  </p>
+  <div class="frage-zeile">
+    <input id="frage" placeholder="Ihre Frage ..." autofocus>
+    <button id="btn" onclick="start()">Fragen</button>
+  </div>
+  <div class="split">
+    <div id="log" class="verlauf"></div>
+    <div class="seqpanel">
+      <div class="seqcap">Ablauf (Sequenzdiagramm) - waechst mit jeder Runde, bleibt an dieser Stelle</div>
+      <div id="seqbox" class="graphbox seqempty">Noch kein Ablauf - stellen Sie eine Frage.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Sichtbarer Fehler-Handler: jeder JS-Fehler erscheint im Log (nie mehr "nichts").
+window.onerror=function(m,src,l){try{var d=document.getElementById("log");if(d){var e=document.createElement("div");e.className="schritt fehler";e.textContent="JS-Fehler: "+m+" (Zeile "+l+")";d.appendChild(e);}}catch(_){}return false;};
+// ====================== KONFIG ======================
+var BASIS_URL = "https://api.deepinfra.com/v1/openai";
+var MAX_RUNDEN = 12;
+
+// ====================== FACH-WERKZEUGE: echter Code auf diesem Rechner ======================
+// Der Agent SCHREIBT Code, der lokale Werkbank-Server (werkbank_server.py) FUEHRT ihn aus
+// (nur 127.0.0.1). Ohne laufenden Server (reine Browser-Datei) ist das aus Sicherheits-
+// gruenden abgeschaltet. Die Datenbasis ist die echte Datei auftraege.csv im selben Ordner.
+async function codeAusfuehren(sprache, code){
+  if(!window.WERKBANK){
+    return { ok:false, text:"Der Werkbank-Server laeuft nicht. In der reinen Browser-Version ist Code-Ausfuehrung aus Sicherheitsgruenden abgeschaltet. Starte start.bat, um echten Code auf diesem Rechner auszufuehren." };
+  }
+  try{
+    var r = await fetch("/ausfuehren", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ sprache:sprache, code:code }) });
+    var j = await r.json();
+    var out = "";
+    if(j.stdout && j.stdout.trim()) out += "Ausgabe:\n" + j.stdout.replace(/\s+$/,"");
+    if(j.stderr && j.stderr.trim()) out += (out?"\n\n":"") + "Fehler/Warnungen:\n" + j.stderr.replace(/\s+$/,"");
+    if(!out) out = "(keine Ausgabe)";
+    out += "\n[Exit-Code " + j.exit + ", " + j.dauer + " ms]";
+    var ok = (j.exit === 0) && !(j.stderr && j.stderr.trim());
+    return { ok:ok, text:out };
+  }catch(e){ return { ok:false, text:"Server-Fehler beim Ausfuehren: " + e.message }; }
+}
+var TOOLS_INFO = {
+  "python_ausfuehren": "schreibt Python-Code und fuehrt ihn auf diesem Rechner aus",
+  "powershell_ausfuehren": "schreibt PowerShell-Code und fuehrt ihn auf diesem Rechner aus",
+  "spawn_agent": "startet fuer jede Teilfrage einen eigenen Subagenten"
+};
+
+function systemPrompt(darfSpawnen){
+  var s =
+  "Du bist ein hilfreicher KI-Agent, der in einem FESTEN ABLAUF arbeitet und echten Code auf diesem Rechner ausfuehren kann. Antworte auf Deutsch.\n" +
+  "In JEDER Runde gibst du zuerst eine Zeile \"Gedanke: <kurz, was du als Naechstes tust und warum>\" aus,\n" +
+  "danach GENAU eine JSON-Zeile - ein Werkzeugaufruf ODER die Endantwort.\n\n" +
+  "DEIN ABLAUF - immer genau in dieser Reihenfolge:\n" +
+  "1) diskutieren: Klaere die Aufgabe - was ist gefragt, was verstehst du, was ist offen.\n" +
+  '   {"werkzeug":"diskutieren","argument":"<deine Klaerung in ein, zwei Saetzen>"}\n' +
+  "2) planen: Lege einen kurzen, nummerierten Plan an, welchen Code du in welcher Reihenfolge schreibst.\n" +
+  '   {"werkzeug":"planen","argument":"1. ...  2. ...  3. ..."}\n' +
+  "3) umsetzen: Arbeite den Plan ab, indem du echten CODE schreibst und ausfuehren laesst:\n" +
+  "   - python_ausfuehren(code): fuehrt dein Python auf diesem Rechner aus und gibt die echte Ausgabe zurueck\n" +
+  "   - powershell_ausfuehren(code): fuehrt dein PowerShell aus (Rechner-Aktionen: Dateien, Systeminfo, Verzeichnisse)\n";
+  if(darfSpawnen){
+    s +=
+    "   - spawn_agent(argument): startet fuer JEDE Teilfrage einen eigenen Subagenten (Teilfragen mit ' | ' trennen)\n";
+  }
+  s +=
+  '   Wenn die Ausgabe des Codes die Frage beantwortet, gib die Endantwort:  {"antwort":"..."}\n\n' +
+  "STRENGE REIHENFOLGE: Erst planen NACH dem diskutieren; erst Code/Antwort NACH dem planen. Ueberspringe keinen Schritt.\n\n" +
+  "CODE RICHTIG UEBERGEBEN: Der Code steht als EIN JSON-String im Feld 'argument'. Zeilenumbrueche als \\n schreiben,\n" +
+  "im Code moeglichst einfache Anfuehrungszeichen verwenden. Gib Ergebnisse mit print() (Python) bzw. Write-Output\n" +
+  "(PowerShell) aus - nur was ausgegeben wird, siehst du als Beobachtung. Beispiel:\n" +
+  '   {"werkzeug":"python_ausfuehren","argument":"print(1+2)"}\n\n' +
+  "SELBSTKORREKTUR: Enthaelt die Beobachtung einen Fehler (Traceback, stderr, Exit-Code != 0), analysiere die\n" +
+  "Meldung und schreibe KORRIGIERTEN Code - gib nicht auf und antworte NICHT mit dem Fehler. Wenn eine Datei\n" +
+  "nicht gefunden wird, liste erst per PowerShell/Python die vorhandenen Dateien und nimm den richtigen Namen.\n" +
+  "Du darfst mehrere Code-Versuche machen.\n\n" +
+  "DATEIEN/ORDNER AUF DEM RECHNER FINDEN: Dein Arbeitsverzeichnis ist NICHT der Ort der Nutzerdaten. Suche gezielt\n" +
+  "mit BEGRENZTER Tiefe - durchsuche NIE ganz C:\\ (zu langsam). Gute Orte: $env:USERPROFILE\\Dropbox,\n" +
+  "$env:USERPROFILE\\Documents, $env:USERPROFILE\\Desktop. Nur Verzeichnisse, mit -Depth und Namensfilter; gib die\n" +
+  "vollen Pfade + Aenderungsdatum aus. PowerShell-Vorlage:\n" +
+  "Get-ChildItem \"$env:USERPROFILE\\Dropbox\",\"$env:USERPROFILE\\Documents\",\"$env:USERPROFILE\\Desktop\" -Directory -Recurse -Depth 5 -ErrorAction SilentlyContinue | Where-Object { $_.Name -match 'MUSTER' } | Sort-Object LastWriteTime -Descending | Select-Object LastWriteTime, FullName\n" +
+  "Waehle MUSTER breit (mehrere Synonyme/Abkuerzungen; fuer Semester z.B. 'se\\d\\d', 'ws\\d\\d', 'ss\\d\\d').\n" +
+  "Bevorzuge den SPEZIFISCHSTEN Treffer: einen Ordner, dessen NAME selbst das Semester/Jahr traegt (z.B. 'Se26-27',\n" +
+  "'WS2425'), NICHT einen Sammelordner wie 'Vorlesungen' oder 'Lehre'. Fuer 'dieses'/'aktuelles' nimm von diesen\n" +
+  "den mit dem HOECHSTEN Jahr bzw. zuletzt geaenderten - berechne NICHT selbst aus dem Datum, welches Semester laeuft.\n" +
+  "Nach EINER erfolgreichen Suche antworte SOFORT mit dem vollen Pfad - keine weiteren Code-Versuche.\n" +
+  "Findest du nichts, weite Muster oder Tiefe aus.\n\n";
+  if(darfSpawnen){
+    s +=
+    "MEHRERE AUFTRAEGE: Betrifft die Frage mehr als einen Auftrag (z.B. ein Vergleich '4711 und 4712'),\n" +
+    "dann sieht dein Plan vor, in der Umsetzung spawn_agent mit je EINER Teilfrage pro Auftrag zu nutzen\n" +
+    '(getrennt durch \' | \', z.B. "Ist Auftrag 4711 termingerecht? | Ist Auftrag 4712 termingerecht?").\n' +
+    "Du schreibst dann keinen Code selbst - das erledigen die Subagenten. Danach fasst du deren Ergebnisse zusammen.\n\n";
+  }
+  s +=
+  "DATENBASIS + FACHREGEL fuer Auftrags-/Bestandsfragen:\n" +
+  "Im Arbeitsverzeichnis liegt die Datei auftraege.csv mit den Spalten:\n" +
+  "auftrag,teil,bestand,wiederbeschaffung_tage,faelligkeit_tage (eine Zeile je Teil eines Auftrags).\n" +
+  "Schreibe Python, das diese Datei mit dem Standardmodul csv liest (KEIN pandas noetig) und rechnet.\n" +
+  "Termingerecht-Regel: Ein Auftrag ist NICHT termingerecht, sobald ein Teil mit bestand 0 eine\n" +
+  "wiederbeschaffung_tage hat, die GROESSER ist als faelligkeit_tage; sonst termingerecht. Nenne das kritische Teil und die Zahlen.\n" +
+  "Rate nicht - lies die echten Werte aus der Datei. Fuer Rechner-/Datei-/Systemfragen nutze PowerShell.\n" +
+  "Fragen OHNE Bezug zu Rechner/Daten: trotzdem erst diskutieren, dann planen\n" +
+  '(Plan = "1. direkt aus meinem Wissen antworten"), dann {"antwort":"..."} - ohne Code.';
+  return s;
+}
+
+// ====================== Schluessel-Verwaltung ======================
+function ladeGespeichert(){
+  try{
+    var k = localStorage.getItem("deepinfra_key");
+    var m = localStorage.getItem("agent_model");
+    if(k) document.getElementById("key").value = k;
+    if(m) document.getElementById("model").value = m;
+    if(k){ document.getElementById("setupHint").innerHTML = '<span class="ok">Schluessel gespeichert.</span> Sie koennen jetzt fragen.'; }
+  }catch(e){}
+}
+function speichern(){
+  var k = document.getElementById("key").value.trim();
+  var m = document.getElementById("model").value.trim() || "meta-llama/Llama-3.3-70B-Instruct";
+  try{ localStorage.setItem("deepinfra_key", k); localStorage.setItem("agent_model", m); }catch(e){}
+  document.getElementById("setupHint").innerHTML = k ? '<span class="ok">Schluessel gespeichert.</span> Sie koennen jetzt fragen.' : "Bitte einen Schluessel eingeben.";
+}
+
+// ====================== LLM-Aufruf (gibt content + Token-Verbrauch zurueck) ======================
+async function frageLLM(nachrichten){
+  var key = document.getElementById("key").value.trim();
+  var model = document.getElementById("model").value.trim() || "meta-llama/Llama-3.3-70B-Instruct";
+  // Timeout: ohne AbortController haengt ein stockender Request (Firewall/VPN/Browser-
+  // Erweiterung blockt api.deepinfra.com) stumm und unbegrenzt nach Schritt 1. Nach 60 s
+  // brechen wir ab und werfen eine sprechende Meldung, die im Log sichtbar wird.
+  var ctrl = new AbortController();
+  var tid = setTimeout(function(){ ctrl.abort(); }, 60000);
+  var resp;
+  try{
+    resp = await fetch(BASIS_URL + "/chat/completions", {
+      method: "POST", signal: ctrl.signal,
+      headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: model, messages: nachrichten, temperature: 0, max_tokens: 400 })
+    });
+  }catch(e){
+    clearTimeout(tid);
+    if(e.name === "AbortError") throw new Error("Zeitueberschreitung: Das Sprachmodell hat nach 60 s nicht geantwortet. Ist api.deepinfra.com erreichbar (Firewall/VPN/Browser-Erweiterung/Proxy)? Ist der Schluessel gueltig?");
+    throw new Error("Netzwerkfehler beim Aufruf des Sprachmodells: " + e.message + ". Ist api.deepinfra.com erreichbar (Firewall/VPN/Browser-Erweiterung)?");
+  }
+  clearTimeout(tid);
+  if(!resp.ok){ var t = await resp.text(); throw new Error("HTTP " + resp.status + ": " + t.slice(0,200)); }
+  var j = await resp.json();
+  return { content: j.choices[0].message.content, usage: j.usage || null };
+}
+
+// ====================== JSON aus Text ======================
+// String-bewusst: Klammern INNERHALB eines JSON-Strings (z.B. { } im Code-Argument)
+// zaehlen NICHT mit - sonst zerbricht das Finden bei code-tragenden Werkzeugaufrufen.
+function findeJson(text){
+  var start=-1, tiefe=0, inStr=false, esc=false;
+  for(var i=0;i<text.length;i++){
+    var c = text[i];
+    if(inStr){
+      if(esc){ esc=false; }
+      else if(c==="\\"){ esc=true; }
+      else if(c==='"'){ inStr=false; }
+      continue;
+    }
+    if(c==='"'){ inStr=true; continue; }
+    if(c==="{"){ if(tiefe===0) start=i; tiefe++; }
+    else if(c==="}"){ if(tiefe>0){ tiefe--; if(tiefe===0 && start>=0){ try{ return JSON.parse(text.slice(start,i+1)); }catch(e){ start=-1; } } } }
+  }
+  return null;
+}
+
+// ====================== Ausgabe-Helfer (rendern in einen Ziel-Container) ======================
+function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+// Sanftes Nachfuehren - aber NUR wenn der Leser ohnehin unten ist. Scrollt er hoch,
+// um den Verlauf zu lesen, bleibt die Ansicht stehen (kein hartes Nach-unten-Reissen).
+// Auto-Follow: bei jedem neuen Output sanft ans Ende scrollen, damit man den Lauf
+// mitverfolgen kann. Pausiert, sobald der Leser hochscrollt (zum Lesen), und nimmt
+// das Folgen wieder auf, sobald er wieder ganz unten ist.
+var _folgen = true;
+function sanftScroll(){
+  try{
+    var el=document.getElementById("log");
+    if(!el || !_folgen) return;
+    el.scrollTo({top:el.scrollHeight, behavior:"smooth"});
+  }catch(e){}
+}
+function mkIn(ziel, cls, html){ var d=document.createElement("div"); d.className=cls; d.innerHTML=html; ziel.appendChild(d); sanftScroll(); return d; }
+function stepIn(ziel, cls, titel, bodyHtml, rolle){ var d=document.createElement("div"); d.className="step "+cls; var rb = rolle ? '<span class="rolle">'+esc(rolle)+'</span>' : ''; d.innerHTML='<div class="t">'+rb+esc(titel)+'</div><div class="b">'+bodyHtml+'</div>'; ziel.appendChild(d); sanftScroll(); return d; }
+function rolLabel(m){ if(m.role==="system") return "System-Anweisung"; if(m.role==="assistant") return "Modell"; if(typeof m.content==="string" && m.content.indexOf("Beobachtung von")===0) return "Werkzeug-Ergebnis"; return "Ihre Frage"; }
+
+// ---- Ablauf-Graph + Sequenzdiagramm: BEIDE werden je Runde ZWISCHEN die Boxen gezeichnet ----
+var gc = 0;
+function gTrunc(s){ s=String(s).replace(/[\r\n]+/g," ").replace(/["();:\[\]{}<>|#]/g," ").replace(/\s+/g," ").trim(); return s.length>30 ? s.slice(0,28)+".." : s; }
+function gReset(GG){
+  GG.flines=["flowchart TD",
+    "classDef q fill:#ffffff,stroke:#1F497D,color:#111;",
+    "classDef m fill:#DCE6F1,stroke:#1F497D,color:#111;",
+    "classDef t fill:#ffffff,stroke:#4F81BD,color:#111;",
+    "classDef s fill:#F5F1FE,stroke:#8B5CF6,color:#111;",
+    "classDef a fill:#1F497D,stroke:#15265F,color:#ffffff;",
+    'F["Ihre Frage"]:::q'];
+  GG.last="F";
+  // Drei Ueberkategorien als Boxen: Nutzer | Rechner | Sprachmodell.
+  // Werkzeug und Subagent liegen INNERHALB von 'Rechner' - sie werden auf dem Rechner
+  // ausgefuehrt, sind also keine eigenen Aussenpartner.
+  GG.slines=["sequenceDiagram",
+    "box rgb(225,235,247) Nutzer",
+    "participant U as Sie",
+    "end",
+    "box rgb(240,242,246) Rechner",
+    "participant R as Rechner",
+    "participant W as Werkzeug",
+    "participant S as Subagent",
+    "end",
+    "box rgb(232,244,238) Sprachmodell",
+    "participant M as Sprachmodell",
+    "end",
+    "U->>R: Frage"];
+}
+function gModell(GG,r){
+  var id="M"+r;
+  GG.flines.push(id+'["Sprachmodell Runde '+r+'"]:::m'); GG.flines.push(GG.last+" --> "+id); GG.last=id;
+  GG.slines.push("R->>M: Verlauf (Runde "+r+")");
+  GG.slines.push("M-->>R: Gedanke + Entscheidung");
+}
+function gWerk(GG,r,name,arg,res){
+  var id="T"+r;
+  GG.flines.push(id+'["Werkzeug '+gTrunc(name+" "+arg)+" ergibt "+gTrunc(res)+'"]:::t'); GG.flines.push("M"+r+' -->|ruft auf| '+id); GG.last=id;
+  GG.slines.push("R->>W: "+gTrunc(name+" "+arg));
+  GG.slines.push("W-->>R: "+gTrunc(res));
+}
+function gSpawn(GG,r,tasks,res){
+  var id="S"+r;
+  GG.flines.push(id+'["Subagenten: '+gTrunc(tasks)+'"]:::s'); GG.flines.push("M"+r+' -->|startet| '+id); GG.last=id;
+  GG.slines.push("R->>S: "+gTrunc(tasks));
+  GG.slines.push("S-->>R: "+gTrunc(res));
+}
+function gAntwort(GG,r,txt){
+  GG.flines.push('A["Antwort: '+gTrunc(txt)+'"]:::a'); GG.flines.push("M"+r+' -->|antwortet| A');
+  GG.slines.push("M-->>R: Antwort");
+  GG.slines.push("R-->>U: Antwort");
+}
+function gVorgehen(GG,r,phase,text){
+  var id="P"+r+phase.charAt(0);
+  GG.flines.push(id+'["'+phase+": "+gTrunc(text)+'"]:::m'); GG.flines.push("M"+r+" --> "+id); GG.last=id;
+  GG.slines.push("Note over M: "+gTrunc(phase+": "+text));
+}
+// useMaxWidth:false laesst Mermaid dem HAUPT-Diagramm (#seqbox) feste Eigenmasse geben
+// (statt responsivem width:100%+inline-max-width). Erst mit festen Eigenmassen kann das
+// CSS es sauber komplett ins Panel einpassen (contain, s. #seqbox svg). Subagenten-
+// Diagramme (.subdiag) bleiben bei den Mermaid-Defaults.
+var SEQ_GROSS = "%%{init:{'sequence':{'useMaxWidth':false}}}%%\n";
+async function gEins(box, def){
+  if(!box) return;
+  if(!window.mermaid){ box.textContent="(Graph braucht Internet fuer die Zeichen-Bibliothek - der Text-Log zeigt alles.)"; return; }
+  var d = (box.id === "seqbox") ? (SEQ_GROSS + def) : def;
+  try{ var r=await mermaid.render("mg"+(++gc), d); box.innerHTML=r.svg; box.classList.remove("seqempty"); }
+  catch(e){ box.textContent="(Graph nicht darstellbar: "+e.message+")"; }
+}
+// Zeichnet das Sequenzdiagramm dieses Laufs in seinen FESTEN Kasten (ersetzt den Inhalt - waechst je Runde,
+// bleibt an derselben Stelle). Nicht mehr zwischen die Verlaufsschritte gestreut.
+async function gZeichne(GG, diagZiel){
+  await gEins(diagZiel, GG.slines.join("\n"));
+}
+
+// ====================== Subagenten starten (echter spawn, sichtbar + parallel) ======================
+async function spawnStarten(ziel, argRaw, tiefe){
+  var tasks = String(argRaw).split("|").map(function(s){return s.trim();}).filter(Boolean);
+  if(!tasks.length) return "Keine Teilfrage uebergeben.";
+  var wrap = document.createElement("div"); wrap.className="subwrap";
+  wrap.innerHTML = '<div class="subtitel">Der Haupt-Agent startet '+tasks.length+' Subagent(en) - jeder mit eigenem Verlauf und eigenen Diagrammen'+(tasks.length>1?', parallel':'')+':</div>';
+  var cols = document.createElement("div"); cols.className="cols"; wrap.appendChild(cols); ziel.appendChild(wrap);
+  var ziele = tasks.map(function(t,i){
+    var col=document.createElement("div"); col.className="col";
+    col.innerHTML='<h4>Subagent '+String.fromCharCode(65+i)+' - '+esc(t)+'</h4>'+
+                  '<div class="seqcap">Ablauf</div><div class="graphbox subdiag"></div>'+
+                  '<div class="substeps"></div>';
+    cols.appendChild(col);
+    return { steps: col.querySelector('.substeps'), diag: col.querySelector('.subdiag') };
+  });
+  var res = await Promise.all(tasks.map(function(t,i){ return lauf(t, ziele[i].steps, {}, tiefe+1, ziele[i].diag); }));
+  return tasks.map(function(t,i){ return t+" -> "+(res[i]||"?"); }).join("  |  ");
+}
+
+// ====================== Die Agenten-Schleife (rendert in 'ziel', eigener Graph 'GG') ======================
+async function lauf(frage, ziel, GG, tiefe, diagZiel){
+  tiefe = tiefe || 0;
+  var darfSpawnen = (tiefe === 0);   // nur der Haupt-Agent darf Subagenten starten (kein Endlos-Spawn)
+  mkIn(ziel, "frg", '<span class="rolle">Sie</span>Ihre Frage: ' + esc(frage));
+  gReset(GG);
+  var verlauf = [ {role:"system", content:systemPrompt(darfSpawnen)}, {role:"user", content:frage} ];
+  var gesehen = {};
+  var tokKumuliert = 0;
+  var phase = "diskutieren";   // fester Ablauf: diskutieren -> planen -> umsetzen
+  for(var runde=1; runde<=MAX_RUNDEN; runde++){
+    mkIn(ziel, "runde", "Runde " + runde + '<span class="kontext">das Sprachmodell wird gefragt - mit dem VOLLSTAENDIGEN bisherigen Verlauf</span>');
+    var msgsHtml = verlauf.map(function(m){
+      var cls = m.role==="system" ? "msg system" : "msg";
+      return '<div class="'+cls+'"><b>'+rolLabel(m)+':</b> '+esc(m.content).replace(/\n/g,"<br>")+'</div>';
+    }).join("");
+    stepIn(ziel, "", "Schritt 1 - Der Rechner schickt den VOLLSTAENDIGEN Verlauf an das Sprachmodell",
+           verlauf.length + " Nachrichten - hier komplett sichtbar:<div class=\"msgs\">" + msgsHtml + "</div>", "Rechner an Sprachmodell");
+    var warte = mkIn(ziel, "schritt", '<span class="rolle">…</span><span style="color:#808080">Wartet auf die Antwort des Sprachmodells … (bricht nach 60 s mit Meldung ab)</span>');
+    var antwortLLM;
+    try{ antwortLLM = await frageLLM(verlauf); }
+    catch(e){ if(warte&&warte.remove) warte.remove(); stepIn(ziel, "fehler", "Fehler beim Aufruf des Sprachmodells", esc(e.message), "Sprachmodell"); return null; }
+    if(warte&&warte.remove) warte.remove();
+    var roh = antwortLLM.content;
+    var tokHtml = "";
+    if(antwortLLM.usage){
+      var p = antwortLLM.usage.prompt_tokens||0, c = antwortLLM.usage.completion_tokens||0;
+      tokKumuliert += (p + c);
+      tokHtml = '<div class="tok">Tokens - Kontext an das Modell (Prompt): <b>'+p+'</b> (waechst jede Runde, weil der ganze Verlauf mitgeschickt wird) &middot; Antwort des Modells: <b>'+c+'</b> &middot; dieser Aufruf: <b>'+(p+c)+'</b>. Bisher ueber alle Runden dieses Agenten: <b>'+tokKumuliert+'</b> Tokens.</div>';
+    }
+    stepIn(ziel, "denken", "Schritt 2 - Das Sprachmodell ueberlegt und entscheidet", "<pre>" + esc(roh.trim()) + "</pre>" + tokHtml, "Sprachmodell");
+    verlauf.push({role:"assistant", content:roh});
+    gModell(GG, runde);
+    var ent = findeJson(roh);
+
+    // Endantwort? (JSON {"antwort":...} ODER freier Text ohne JSON)
+    var istAntwort = ent ? ("antwort" in ent) : true;
+    if(istAntwort){
+      var antw = (ent && ("antwort" in ent)) ? String(ent.antwort) : roh.trim();
+      if(phase !== "umsetzen"){
+        var hz = "Noch nicht antworten - erst " + (phase==="diskutieren" ? "diskutieren, dann planen" : "planen") + ".";
+        stepIn(ziel, "beob", "Hinweis - der Ablauf ist noch nicht durch", esc(hz));
+        verlauf.push({role:"user", content:"Hinweis: " + hz});
+        continue;
+      }
+      gAntwort(GG, runde, antw); await gZeichne(GG, diagZiel);
+      mkIn(ziel, "schritt antwort", '<span class="rolle">Sprachmodell an Sie</span>Antwort des Agenten: ' + esc(antw));
+      return antw;
+    }
+
+    var name = ent.werkzeug, arg = (ent.argument!==undefined ? ent.argument : "");
+
+    // --- Vorgehen 1: diskutieren ---
+    if(name === "diskutieren"){
+      if(phase !== "diskutieren"){ var h1 = "'diskutieren' ist schon erledigt - mach mit '" + phase + "' weiter."; stepIn(ziel,"beob","Hinweis",esc(h1)); verlauf.push({role:"user",content:"Hinweis: "+h1}); continue; }
+      stepIn(ziel, "diskut", "Vorgehen 1 - Der Agent klaert die Aufgabe (diskutieren)", "<pre>" + esc(String(arg)) + "</pre>", "Sprachmodell");
+      gVorgehen(GG, runde, "diskutieren", String(arg)); await gZeichne(GG, diagZiel);
+      phase = "planen";
+      verlauf.push({role:"user", content:"Aufgabe geklaert. Mach jetzt Schritt 2: planen (Werkzeug 'planen')."});
+      continue;
+    }
+    // --- Vorgehen 2: planen ---
+    if(name === "planen"){
+      if(phase === "diskutieren"){ var h2 = "Erst diskutieren, dann planen."; stepIn(ziel,"beob","Hinweis - Reihenfolge",esc(h2)); verlauf.push({role:"user",content:"Hinweis: "+h2}); continue; }
+      if(phase === "umsetzen"){ var h3 = "Der Plan steht schon - setze ihn jetzt mit den Fach-Werkzeugen um."; stepIn(ziel,"beob","Hinweis",esc(h3)); verlauf.push({role:"user",content:"Hinweis: "+h3}); continue; }
+      stepIn(ziel, "plan", "Vorgehen 2 - Der Agent macht einen Plan (planen)", "<pre>" + esc(String(arg)) + "</pre>", "Sprachmodell");
+      gVorgehen(GG, runde, "planen", String(arg)); await gZeichne(GG, diagZiel);
+      phase = "umsetzen";
+      verlauf.push({role:"user", content:"Plan angenommen. Setze ihn jetzt Schritt fuer Schritt mit den Fach-Werkzeugen um."});
+      continue;
+    }
+
+    // Ab hier Fach-Werkzeuge / spawn - erst in der Umsetzung erlaubt
+    if(phase !== "umsetzen"){
+      var hn = "Erst " + (phase==="diskutieren" ? "diskutieren" : "planen") + ", bevor du Fach-Werkzeuge nutzt.";
+      stepIn(ziel, "beob", "Hinweis - der Ablauf ist noch nicht durch", esc(hn));
+      verlauf.push({role:"user", content:"Hinweis: " + hn});
+      continue;
+    }
+
+    // --- Umsetzung, Sonderfall: spawn_agent (echter Start von Subagenten) ---
+    if(name === "spawn_agent"){
+      if(!darfSpawnen){
+        var bs = "spawn_agent ist hier nicht verfuegbar (Subagenten starten selbst keine weiteren Agenten). Beantworte die Frage direkt.";
+        stepIn(ziel, "aktion", "Umsetzen - Werkzeugaufruf abgelehnt", "Werkzeug <code>spawn_agent</code> ist nur dem Haupt-Agenten erlaubt.");
+        stepIn(ziel, "beob", "Umsetzen - Ergebnis (Beobachtung)", esc(bs));
+        verlauf.push({role:"user", content:"Beobachtung von spawn_agent: " + bs});
+        continue;
+      }
+      stepIn(ziel, "spawn", "Umsetzen - der Rechner startet Subagenten",
+             "Werkzeug <code>spawn_agent</code> mit den Teilfragen <code>" + esc(String(arg)) + "</code>.", "Rechner an Subagent");
+      var bspawn = await spawnStarten(ziel, arg, tiefe);
+      stepIn(ziel, "beob", "Umsetzen - die Subagenten liefern ihre Ergebnisse zurueck (Beobachtung)", esc(bspawn), "Subagent an Rechner");
+      gSpawn(GG, runde, String(arg), bspawn);
+      await gZeichne(GG, diagZiel);
+      verlauf.push({role:"user", content:"Beobachtung von spawn_agent: " + bspawn});
+      continue;
+    }
+
+    // --- Umsetzung: Code-Werkzeuge (echte Ausfuehrung auf diesem Rechner) ---
+    if(name === "python_ausfuehren" || name === "powershell_ausfuehren"){
+      var sprache = (name === "powershell_ausfuehren") ? "powershell" : "python";
+      var spLabel = (sprache === "powershell") ? "PowerShell" : "Python";
+      stepIn(ziel, "aktion", "Umsetzen - der Agent schreibt " + spLabel + "-Code, der Rechner fuehrt ihn aus",
+             "Geschriebener Code:<pre>" + esc(String(arg)) + "</pre>", "Rechner an Werkzeug");
+      var merkc = name + "|" + String(arg), erg;
+      if(gesehen[merkc]) erg = { ok:false, text:"Genau diesen Code schon ausgefuehrt (Ergebnis war): " + gesehen[merkc] + " - schreibe etwas anderes oder antworte jetzt." };
+      else { erg = await codeAusfuehren(sprache, String(arg)); gesehen[merkc] = erg.text; }
+      if(erg.ok){
+        stepIn(ziel, "beob", "Umsetzen - der Rechner liefert die ECHTE Ausgabe zurueck (Beobachtung)", "<pre>" + esc(erg.text) + "</pre>", "Werkzeug an Rechner");
+      } else {
+        stepIn(ziel, "fehler", "Umsetzen - der Code lief auf einen FEHLER - der Agent kann ihn jetzt beheben (Beobachtung)", "<pre>" + esc(erg.text) + "</pre>", "Werkzeug an Rechner");
+      }
+      gWerk(GG, runde, spLabel + "-Code", "", erg.text);
+      await gZeichne(GG, diagZiel);
+      verlauf.push({role:"user", content:"Beobachtung von " + name + ":\n" + erg.text});
+      continue;
+    }
+
+    // --- Unbekanntes Werkzeug ---
+    var verf = "python_ausfuehren, powershell_ausfuehren" + (darfSpawnen ? ", spawn_agent" : "");
+    stepIn(ziel, "aktion", "Umsetzen - unbekanntes Werkzeug", "Das Werkzeug <code>" + esc(name) + "</code> gibt es nicht.");
+    stepIn(ziel, "beob", "Umsetzen - Beobachtung", "Unbekanntes Werkzeug '" + esc(name) + "'. Verfuegbar: " + esc(verf) + ".");
+    verlauf.push({role:"user", content:"Beobachtung: Unbekanntes Werkzeug '" + name + "'. Verfuegbar sind: " + verf + "."});
+  }
+  mkIn(ziel, "schritt fehler", "Runden-Limit erreicht, keine Endantwort.");
+  return null;
+}
+
+// ====================== Bedienung ======================
+function setF(t){ document.getElementById("frage").value=t; document.getElementById("frage").focus(); }
+function pruefeSchluessel(){
+  var key = document.getElementById("key").value.trim();
+  if(!key){
+    document.getElementById("log").innerHTML = '<div class="schritt fehler"><b>Kein Schluessel.</b> Bitte oben den DeepInfra-Schluessel einfuegen und auf "Merken" klicken.</div>';
+    document.getElementById("key").focus();
+    return false;
+  }
+  return true;
+}
+async function start(){
+  var q = document.getElementById("frage").value.trim(); if(!q) return;
+  if(!pruefeSchluessel()) return;
+  var log = document.getElementById("log"); log.innerHTML = "";
+  _folgen = true;   // bei jedem neuen Lauf dem Output wieder folgen
+  var seq = document.getElementById("seqbox"); if(seq){ seq.innerHTML = ""; seq.classList.remove("seqempty"); }
+  document.getElementById("btn").disabled = true;
+  try{ await lauf(q, log, {}, 0, seq); } finally { document.getElementById("btn").disabled = false; }
+}
+document.getElementById("frage").addEventListener("keydown", function(e){ if(e.key==="Enter") start(); });
+// Auto-Follow steuern: Hochscrollen pausiert das Folgen, Rueckkehr ans Ende nimmt es wieder auf.
+(function(){ var el=document.getElementById("log"); if(!el) return;
+  el.addEventListener("wheel", function(e){
+    if(e.deltaY < 0) _folgen = false;
+    var abstand = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if(abstand < 60) _folgen = true;
+  }, {passive:true});
+})();
+if(window.mermaid){ try{ mermaid.initialize({startOnLoad:false, securityLevel:"loose", flowchart:{htmlLabels:true}}); }catch(e){} }
+ladeGespeichert();
+try{
+  var qp0 = new URLSearchParams(location.search);
+  var f0 = qp0.get("frage");
+  if(f0){ document.getElementById("frage").value = f0; }
+  if(f0 && qp0.get("run")==="1"){ setTimeout(start, 400); }
+}catch(e){}
+</script>
+</body>
+</html>

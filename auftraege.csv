@@ -1,0 +1,10 @@
+auftrag,teil,bestand,wiederbeschaffung_tage,faelligkeit_tage
+4711,Welle,5,0,10
+4711,Ritzel,3,0,10
+4711,Lager,0,15,10
+4712,Gehaeuse,2,0,8
+4712,Deckel,10,0,8
+4713,Flansch,0,10,30
+4713,Dichtung,4,0,30
+4714,Schraube,0,3,2
+4714,Mutter,8,0,2
