@@ -19,16 +19,25 @@ Agentic-Zyklus: erst versteht er die Aufgabe, dann plant er, dann fuehrt er aus.
 Datenbasis ist die echte Datei `auftraege.csv` (Spalten: `auftrag,teil,bestand,wiederbeschaffung_tage,faelligkeit_tage`).
 Der Agent liest sie mit selbst geschriebenem Python - kein eingebautes Fake-Verzeichnis.
 
+## Schluessel eintragen (einmalig)
+
+Der Agent spricht ein Sprachmodell ueber eine OpenAI-kompatible Cloud an und braucht
+dafuer einen Schluessel (z.B. von DeepInfra). Zwei Wege:
+
+- **Reine Browser-Version:** `glaeserner-agent.html` doppelklicken und den Schluessel
+  oben im Setup-Feld eintragen (bleibt nur im Browser).
+- **Server-Version:** `.env.example` nach `.env` kopieren und den Schluessel eintragen
+  (`OPENAI_API_KEY=...`). Alternativ vor dem Start `set OPENAI_API_KEY=...` (Windows).
+
 ## Starten (empfohlen: mit echter Code-Ausfuehrung)
 
 **Doppelklick auf `start.bat`.** Der lokale Werkbank-Server startet (nur `127.0.0.1`)
-und der Browser oeffnet sich. Der LLM-Schluessel aus der Projekt-.env ist eingebaut -
-nichts eingeben. Beenden: das Server-Fenster schliessen oder Strg+C.
+und der Browser oeffnet sich. Den Schluessel liest er aus der `.env` (oder der
+Umgebungsvariable). Beenden: das Server-Fenster schliessen oder Strg+C.
 
-Alternativ von Hand:
+Alternativ von Hand, im Ordner dieses Repos:
 
 ```
-cd docs\lehre\agent-demo
 python werkbank_server.py      (oder: py -3 werkbank_server.py)
 ```
 
@@ -44,15 +53,12 @@ Beispiele zum Ausprobieren:
 Deep-Link fuers Vorfuehren (Frage vorausgefuellt, laeuft automatisch los):
 `http://127.0.0.1:8761/?frage=Ist%20Auftrag%204711%20termingerecht%3F&run=1`
 
-## Teilen (ohne Server, ohne Code-Ausfuehrung)
+## Ohne Server (nur Browser, ohne Code-Ausfuehrung)
 
 - `glaeserner-agent.html` - reine Browser-Version, per Doppelklick. Fragt den
-  DeepInfra-Schluessel ab (wird nur im Browser gemerkt, steht nicht in der Datei).
+  Schluessel ab (wird nur im Browser gemerkt, steht nicht in der Datei).
   **Ohne** laufenden Werkbank-Server ist die Code-Ausfuehrung aus Sicherheitsgruenden
   abgeschaltet - allgemeine Fragen gehen trotzdem. Gefahrlos weitergebbar.
-- `agent-lokal.html` - persoenliche Kopie mit eingebautem Schluessel (Doppelklick,
-  nichts eingeben). **gitignored** - nie weitergeben. Neu bauen:
-  `python ..\_build\make-lokal.py`.
 
 ## Sicherheit
 
@@ -74,10 +80,10 @@ Projekt-.env - Internet noetig, laeuft sofort. Modell einstellbar oben im Setup-
 | `start.bat` | Doppelklick: startet Server + Browser |
 | `werkbank_server.py` | lokaler Server (127.0.0.1), fuehrt Python/PowerShell aus |
 | `glaeserner-agent.html` | die Oberflaeche (auch ohne Server als reine Browser-Datei nutzbar) |
-| `agent-lokal.html` | persoenliche Kopie mit Schluessel (gitignored) |
+| `.env.example` | Vorlage fuer den Schluessel: nach `.env` kopieren |
 | `auftraege.csv` | echte Datenbasis der Auftraege/Bestaende |
 | `glaeserner_agent.py`, `agent_web.py` | aeltere, einfache Terminal-/Web-Variante (ohne Code-Ausfuehrung) |
 
 ## Benoetigt
 
-Nur Python (Standardbibliothek, keine Zusatzpakete). Getestet mit Python 3.14.
+Nur Python (Standardbibliothek, keine Zusatzpakete). Getestet mit Python 3.13/3.14.

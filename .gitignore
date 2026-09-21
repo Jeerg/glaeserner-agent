@@ -1,0 +1,6 @@
+# Eigener Schluessel - nie committen:
+.env
+# Persoenliche Kopie mit eingebautem Schluessel (falls jemand eine baut):
+agent-lokal.html
+__pycache__/
+*.pyc

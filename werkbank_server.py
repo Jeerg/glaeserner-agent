@@ -17,19 +17,26 @@ import json, os, sys, subprocess, tempfile, time, webbrowser, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HIER = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HIER, "..", "..", ".."))   # tbx_stzrim
+ROOT = os.path.abspath(os.path.join(HIER, "..", "..", ".."))   # Monorepo-Wurzel (Entwicklung)
 HTML = os.path.join(HIER, "glaeserner-agent.html")
 PORT = 8761
 TIMEOUT = 20   # Sekunden je Code-Ausfuehrung
 
 
 def lade_key():
-    try:
-        for z in open(os.path.join(ROOT, ".env"), encoding="utf-8"):
-            if z.strip().startswith("OPENAI_API_KEY="):
-                return z.split("=", 1)[1].strip().strip('"').strip("'")
-    except Exception:
-        pass
+    # 1) Umgebungsvariable (z.B. `set OPENAI_API_KEY=...` vor dem Start),
+    # 2) .env im EIGENEN Ordner (Standalone-Betrieb),
+    # 3) .env in der Monorepo-Wurzel (Entwicklung im Gesamtprojekt).
+    k = os.environ.get("OPENAI_API_KEY", "").strip()
+    if k:
+        return k
+    for pfad in (os.path.join(HIER, ".env"), os.path.join(ROOT, ".env")):
+        try:
+            for z in open(pfad, encoding="utf-8"):
+                if z.strip().startswith("OPENAI_API_KEY="):
+                    return z.split("=", 1)[1].strip().strip('"').strip("'")
+        except Exception:
+            pass
     return ""
 
 
