@@ -258,7 +258,7 @@ async function frageLLM(nachrichten){
   var tid = setTimeout(function(){ ctrl.abort(); }, 60000);
   var resp;
   try{
-    resp = await fetch(BASIS_URL + "/chat/completions", {
+    resp = await fetch((window.BASIS_URL_OVERRIDE || BASIS_URL) + "/chat/completions", {
       method: "POST", signal: ctrl.signal,
       headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
       body: JSON.stringify({ model: model, messages: nachrichten, temperature: 0, max_tokens: 400 })

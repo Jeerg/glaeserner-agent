@@ -41,13 +41,24 @@ def lade_key():
 
 
 def seite():
+    # Backend-Wahl (fuer Offline-Betrieb): RIM_BASIS_URL zeigt auf ein lokales,
+    # OpenAI-kompatibles Modell (z.B. Ollama: http://localhost:11434/v1), RIM_MODELL
+    # nennt das lokale Modell. Ohne diese Variablen bleibt es beim Cloud-Default im HTML.
     html = open(HTML, encoding="utf-8").read()
-    inject = ('<script>window.WERKBANK=true;try{'
-              'var _k=' + json.dumps(lade_key()) + ';'
-              'var kf=document.getElementById("key");if(kf)kf.value=_k;'
-              'var s=document.getElementById("setup");if(s)s.style.display="none";'
-              '}catch(e){}</script>')
-    return html.replace("</body>", inject + "\n</body>", 1)
+    key = lade_key()
+    basis = os.environ.get("RIM_BASIS_URL", "").strip()
+    modell = os.environ.get("RIM_MODELL", "").strip()
+    if basis and not key:
+        key = "local"   # lokale Backends ignorieren den Schluessel; das Feld darf nur nicht leer sein
+    js = "window.WERKBANK=true;"
+    if basis:
+        js += "window.BASIS_URL_OVERRIDE=" + json.dumps(basis) + ";"
+    js += "try{var _k=" + json.dumps(key) + ";"
+    js += 'var kf=document.getElementById("key");if(kf)kf.value=_k;'
+    if modell:
+        js += 'var mf=document.getElementById("model");if(mf)mf.value=' + json.dumps(modell) + ";"
+    js += 'var s=document.getElementById("setup");if(s)s.style.display="none";}catch(e){}'
+    return html.replace("</body>", "<script>" + js + "</script>\n</body>", 1)
 
 
 def ausfuehren(sprache, code):
