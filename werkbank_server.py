@@ -70,8 +70,16 @@ def ausfuehren(sprache, code):
     try:
         if sprache == "powershell":
             # PowerShell-Ausgabe auf UTF-8 zwingen, sonst kommen Umlaute als Mojibake zurueck.
-            code = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; " + code
-            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", code]
+            code = "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8\n" + code
+            # Code in eine temporaere .ps1 schreiben und mit -File ausfuehren (NICHT -Command):
+            # ueber -Command zerstoert die Windows-Argumentweitergabe Backslash-Ziffer-Folgen
+            # wie \01 \02 \03 (werden zu Steuerzeichen) - Pfade wie "...\03_Arbeit" brechen dann.
+            # BOM (utf-8-sig), damit Windows PowerShell 5.1 Umlaute im Skript korrekt liest.
+            fd, pfad = tempfile.mkstemp(suffix=".ps1", dir=HIER)
+            os.close(fd)
+            with open(pfad, "w", encoding="utf-8-sig") as f:
+                f.write(code)
+            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", pfad]
         else:
             fd, pfad = tempfile.mkstemp(suffix=".py", dir=HIER)
             os.close(fd)
